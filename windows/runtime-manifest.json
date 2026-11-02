@@ -1,0 +1,49 @@
+{
+  "product": "Frame",
+  "version": "3.2.0",
+  "platform": "win32",
+  "arch": "x64",
+  "electron": {
+    "version": "45.1.0",
+    "url": "https://github.com/electron/electron/releases/download/v45.1.0/electron-v45.1.0-win32-x64.zip",
+    "sha256": "55eaba17abff7b5bba6c3bbc85068967379024fe742fe9c7fdba9118922ccbe2"
+  },
+  "ffmpeg": {
+    "version": "9.0 20261029",
+    "url": "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-n9.0-latest-win64-gpl-shared-9.0.zip",
+    "sha256": "809bdb68f8e9bb5db07e24ae8e09e7d85751dfe97060dd8b75a4097f5620df14"
+  },
+  "verification": {
+    "windowsHardwareRun": false,
+    "sharedElectronRunOnMac": true,
+    "features": [
+      "SVGA-PAG",
+      "SVGA-GIF",
+      "PAG-GIF",
+      "MP3",
+      "MP4-PNG"
+    ],
+    "realDesktopIPC": true,
+    "reexport": true,
+    "cancellation": true,
+    "PAGAlphaPixelCheck": true
+  },
+  "files": {
+    "Frame.exe": {
+      "bytes": 250046976,
+      "sha256": "5c23daac3366c37ecd66004dcf3b4c6e3ff4c678420645a43a9cea3988f8f190"
+    },
+    "resources/app.asar": {
+      "bytes": 3573232,
+      "sha256": "a4ce1e205c2c7ee5b0b11d223f815e386d6bf84e07614380ca9b16993dafbc88"
+    },
+    "resources/bin/ffmpeg.exe": {
+      "bytes": 551424,
+      "sha256": "13e4718d1e5bd4bc8a0c4fc566ba88b3ad487d57fefa5141b22bb65bd62f8dad"
+    },
+    "resources/bin/ffprobe.exe": {
+      "bytes": 269824,
+      "sha256": "fbb308a555ca2bacd974553e499030ae488894604bca1e2e3ce3873caf75a7cb"
+    }
+  }
+}

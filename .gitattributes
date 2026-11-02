@@ -1,0 +1,6 @@
+* text=auto
+*.png binary
+*.wasm binary
+*.icns binary
+*.command text eol=lf
+*.sh text eol=lf

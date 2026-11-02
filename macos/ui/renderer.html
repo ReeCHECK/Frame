@@ -1,0 +1,21 @@
+<!doctype html><meta charset="utf-8"><style>html,body{margin:0}#render{width:750px;height:750px}</style><div id="render"></div><script src="../vendor/svga.min.js"></script><script src="../vendor/libpag.js"></script><script>
+window.__FRAME_OFFSCREEN_RENDERER=true;window.requestAnimationFrame=callback=>setTimeout(()=>callback(performance.now()),16);window.cancelAnimationFrame=id=>clearTimeout(id);
+let sourceType='svga',renderPlayer,pagView;
+const decode64=s=>Uint8Array.from(atob(s),c=>c.charCodeAt(0));
+window.loadAnimation=base64=>new Promise((resolve,reject)=>{
+ sourceType='svga';window.renderPlayer=renderPlayer=new SVGA.Player('#render');const timeout=setTimeout(()=>reject(new Error('SVGA 读取超时')),60000);
+ new SVGA.Parser('#render').load('data:svga/2.0;base64,'+base64,video=>{
+ clearTimeout(timeout);video.audios=[];const stage=document.getElementById('render');stage.style.width=video.videoSize.width+'px';stage.style.height=video.videoSize.height+'px';renderPlayer.setVideoItem(video);renderPlayer.setContentMode('Fill');renderPlayer.stepToFrame(0,false);resolve({width:video.videoSize.width,height:video.videoSize.height,fps:video.FPS,frames:video.frames});
+ },error=>{clearTimeout(timeout);reject(new Error(String(error)))});
+});
+window.loadPAG=async(base64,wasm)=>{
+ sourceType='pag';window.pagPhase="initializing";const PAG=await libpag.PAGInit({wasmBinary:decode64(wasm)});window.pagPhase="loading file";const data=decode64(base64),file=await PAG.PAGFile.load(data.buffer);
+ const stage=document.getElementById('render'),canvas=document.createElement('canvas');canvas.width=file.width();canvas.height=file.height();stage.replaceChildren(canvas);
+ window.pagPhase="creating view";pagView=await PAG.PAGView.init(file,canvas,{useCanvas2D:true,firstFrame:false});window.pagPhase="ready";
+ return {width:file.width(),height:file.height(),fps:file.frameRate(),duration:file.duration()/1e6};
+};
+window.renderFrame=async(index,progress)=>{
+ if(sourceType==='pag'){pagView.player.videoReaders.forEach(reader=>reader.pause());pagView.setProgress(progress);await pagView.flush();pagView.player.videoReaders.forEach(reader=>reader.pause());const errors=pagView.player.videoReaders.map(r=>r.getError()).filter(Boolean);if(errors.length)throw new Error('PAG 视频图层解码失败：'+errors.map(String).join('; '));window.frameDiagnostics={visibility:document.visibilityState,phase:window.pagPhase,videos:pagView.player.videoReaders.map(r=>{const v=r.getVideo();return {error:String(r.getError()),readyState:v.readyState,time:v.currentTime,w:v.videoWidth,h:v.videoHeight,paused:v.paused}})}}else renderPlayer.stepToFrame(index,false);
+ return document.querySelector('canvas').toDataURL('image/png').split(',')[1];
+};
+</script>

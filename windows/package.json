@@ -1,0 +1,18 @@
+{
+  "name": "frame-windows-build",
+  "private": true,
+  "version": "3.2.0",
+  "type": "commonjs",
+  "devDependencies": {
+    "@electron/asar": "^4.3.1",
+    "7zip-bin": "^5.2.0",
+    "png-to-ico": "^3.0.2",
+    "resedit": "^3.1.0"
+  },
+  "scripts": {
+    "build:windows": "node build-windows.cjs"
+  },
+  "engines": {
+    "node": ">=22.12.0"
+  }
+}
