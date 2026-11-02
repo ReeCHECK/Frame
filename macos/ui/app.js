@@ -15,7 +15,7 @@ function renderQueue(){
  for(const file of files){
   const row=document.createElement('div');row.className='file-item'+(file.id===state.selectedId?' selected':'');row.setAttribute('role','option');row.setAttribute('aria-selected',String(file.id===state.selectedId));row.tabIndex=0;row.dataset.id=file.id;row.title=file.name;
   const thumb=document.createElement('div');thumb.className='file-thumb';
-  if(thumbs.has(file.id)){const image=document.createElement('img');image.src=thumbs.get(file.id);image.alt='';thumb.append(image)}else thumb.innerHTML=icon(file.tool==='mp3'?'music':file.tool==='mp4-png'?'video':'file');
+  if(thumbs.has(file.id)){const image=document.createElement('img');image.src=thumbs.get(file.id);image.alt='';thumb.append(image)}else thumb.innerHTML=icon(file.tool==='mp3'?'music':file.tool.endsWith('-png')?'video':'file');
   const copy=document.createElement('div');copy.className='file-copy';
   const name=document.createElement('p');name.className='file-name';name.textContent=file.name;
   const meta=document.createElement('p');meta.className='file-meta';meta.textContent=file.info?(file.tool==='mp3'?`${(file.info.sampleRate/1000).toFixed(1)} kHz · ${file.info.duration.toFixed(1)}s`:`${file.info.width} × ${file.info.height} · ${Number(file.info.fps.toFixed(2))} fps`):bytes(file.bytes);
@@ -43,24 +43,24 @@ function render(){
  const audio=file?.tool==='mp3';
  $('meta-label-size').textContent=audio?'采样率':'画面尺寸';$('meta-label-fps').textContent=audio?'声道':'帧率';$('meta-label-duration').textContent=audio?'时长':file?.tool==='mp4-png'?'时长 / 预计帧数':'时长 / 总帧数';
  $('meta-size').textContent=i?(audio?`${(i.sampleRate/1000).toFixed(1)} kHz`:`${i.width} × ${i.height}`):'—';$('meta-fps').textContent=i?(audio?(i.channels===1?'单声道':i.channels===2?'立体声':i.channels+' 声道'):`${Number(i.fps.toFixed(2))} fps`):'—';$('meta-duration').textContent=i?(audio?`${i.duration.toFixed(2)}s`:`${i.duration.toFixed(2)}s / ${i.frames} 帧`):'—';$('meta-bytes').textContent=file?bytes(file.bytes):'—';
- $('bitrate-row').hidden=!audio;$('meta-bitrate').textContent=i&&i.bitrate?`${Math.round(i.bitrate/1000)} kbps`:'—';document.querySelector('.format-badge').textContent=audio?'MP3':file?.tool==='mp4-png'?'MP4':file?.tool==='pag-gif'?'PAG':'SVGA';
+ $('bitrate-row').hidden=!audio;$('meta-bitrate').textContent=i&&i.bitrate?`${Math.round(i.bitrate/1000)} kbps`:'—';document.querySelector('.format-badge').textContent=toolDefinitions[state.activeTool||'svga-pag'].input;
  const path=state.outputDir.split('/');$('folder-name').textContent=path.pop()||'选择输出文件夹';$('folder-parent').textContent=path.join('/').replace(/^\/Users\/[^/]+\//,'~/');document.querySelector('.folder-card').title=state.outputDir;
  $('choose-output').disabled=state.busy;
  const jobs=exportJobs(),ready=jobs.length,reexport=ready>0&&jobs.every(f=>f.status==='done');
  $('convert').classList.toggle('stop',state.busy);$('convert').disabled=state.cancelRequested||(!state.busy&&!ready);
- $('convert').querySelector('span').textContent=state.busy?(state.cancelRequested?'正在停止…':'停止转换'):ready?`${reexport?'重新导出':state.activeTool==='mp3'?'开始压缩':state.activeTool==='mp4-png'?'导出 PNG':'开始转换'} · ${ready} 个文件`:(state.activeTool==='mp3'?'开始压缩':state.activeTool==='mp4-png'?'导出 PNG':'开始转换');
+ $('convert').querySelector('span').textContent=state.busy?(state.cancelRequested?'正在停止…':'停止转换'):ready?`${reexport?'重新导出':state.activeTool==='mp3'?'开始压缩':state.activeTool?.endsWith('-png')?'导出 PNG':'开始转换'} · ${ready} 个文件`:(state.activeTool==='mp3'?'开始压缩':state.activeTool?.endsWith('-png')?'导出 PNG':'开始转换');
  $('convert').querySelector('svg use').setAttribute('href','#i-'+(state.busy?'stop':'arrow'));
  $('convert-hint').textContent=state.busy?'已完成的文件会保留':ready?(reexport?'按当前设置生成新文件，保留上次结果':'⌘ Return 开始批量转换'):'添加文件后即可开始';
  const active=state.files.find(f=>f.status==='running');
  $('status').textContent=active?`${active.name} · ${active.stage} · ${active.progress}%`:state.busy?'正在准备转换队列':state.files.length?`队列 ${state.files.length} 个文件 · 已完成 ${state.files.filter(f=>f.status==='done'&&f.tool===(state.activeTool||'svga-pag')).length} 个`:'准备就绪';
- $('status-right').textContent=active?'请保持 App 打开':'Frame 3.2 · 全部在本机处理';
+ $('status-right').textContent=active?'请保持 App 打开':'Frame 3.3 · 全部在本机处理';
  const result=$('result');result.replaceChildren();result.hidden=true;result.className='result';
  if(file&&['done','error','cancelled','running','queued'].includes(file.status)){
   result.hidden=false;result.classList.add(file.status==='done'?'done':file.status==='error'||file.status==='cancelled'?'error':'running');
-  const title=document.createElement('strong'),detail=document.createElement('p');title.textContent=file.status==='done'?(file.tool==='mp3'?'压缩完成':file.tool==='mp4-png'?'导出完成':'转换完成'):file.status==='running'?`转换中 · ${file.progress}%`:file.status==='queued'?'正在排队':file.status==='cancelled'?'转换已停止':'这个文件需要处理';
+  const title=document.createElement('strong'),detail=document.createElement('p');title.textContent=file.status==='done'?(file.tool==='mp3'?'压缩完成':file.tool.endsWith('-png')?'导出完成':'转换完成'):file.status==='running'?`转换中 · ${file.progress}%`:file.status==='queued'?'正在排队':file.status==='cancelled'?'转换已停止':'这个文件需要处理';
   if(file.status==='done'){
    const ratio=(1-file.outputBytes/file.bytes)*100;
-   detail.textContent=file.tool==='mp4-png'?`${file.resultFrames} 张 PNG · ${bytes(file.outputBytes)}`:`${bytes(file.bytes)} → ${bytes(file.outputBytes)}${ratio>=1?` · 缩小 ${ratio.toFixed(0)}%`:file.tool==='mp3'?' · 体积基本不变':''}`;
+   detail.textContent=file.tool.endsWith('-png')?`${file.resultFrames} 张 PNG · ${bytes(file.outputBytes)}`:`${bytes(file.bytes)} → ${bytes(file.outputBytes)}${ratio>=1?` · 缩小 ${ratio.toFixed(0)}%`:file.tool==='mp3'?' · 体积基本不变':''}`;
    const reveal=document.createElement('button');reveal.className='text-button';reveal.innerHTML=icon('folder')+'在 Finder 中显示';reveal.onclick=()=>post('reveal',{id:file.id});result.append(title,detail,reveal);
    if(file.resultNote){const note=document.createElement('p');note.className='result-note';note.textContent=file.resultNote;result.append(note)}
    if(file.resultSettingsKey!==settingsKey(file.tool)){const changed=document.createElement('p');changed.className='settings-changed';changed.textContent='设置已调整，上次结果保持不变。重新导出后生效。';result.append(changed)}
@@ -81,11 +81,11 @@ function time(frame,fps){const total=frame/fps,m=Math.floor(total/60),s=total%60
 function updateFrame(frame){if(!video)return;if(frame>=video.frames*.4&&!thumbs.has(previewId)){const canvas=$('stage').querySelector('canvas');if(canvas)try{thumbs.set(previewId,canvas.toDataURL('image/png'));renderQueue()}catch{}}$('timeline').value=frame;$('frame-number').textContent=`${frame+1} / ${video.frames}`;$('time').textContent=time(frame,video.FPS)}
 function togglePlaying(value){playing=value;setIcon($('play'),playing?'pause':'play');$('play').setAttribute('aria-label',playing?'暂停动画':'播放动画')}
 function resizeStage(){if(!video)return;const c=$('canvas'),v=$('zoom').value,scale=v==='fit'?Math.max(.01,Math.min((c.clientWidth-38)/video.videoSize.width,(c.clientHeight-46)/video.videoSize.height,1)):Number(v);$('stage').style.transform=`translate(-50%,-50%) scale(${scale})`}
-function clearPreview(increment=true){$('media-preview').hidden=true;$('playback').hidden=false;if(increment)previewSeq++;try{player?.pauseAnimation();player?.clear()}catch{}player=null;video=null;previewId='';togglePlaying(false);$('stage').replaceChildren();$('stage-wrap').hidden=true;$('preview-empty').hidden=false;$('canvas-tag').hidden=true;$('loading-preview').hidden=true;for(const id of ['play','previous','next','timeline','loop'])$(id).disabled=true;$('timeline').value=0;$('frame-number').textContent='—';$('time').textContent=$('duration').textContent='00:00.00';const file=current();$('preview-empty').querySelector('h3').textContent=file?.error?'这个文件暂时无法预览':(toolDefinitions[state.activeTool||'svga-pag']?.empty||'让动效，换个格式。');$('preview-empty').querySelector('p').textContent=file?.error?'请查看右侧的具体原因，或选择其他文件。':'添加 SVGA，即可预览动画并转换为 PAG。尺寸、帧率与透明背景跟随原文件。'}
+function clearPreview(increment=true){$('media-preview').hidden=true;$('playback').hidden=false;if(increment)previewSeq++;try{player?.pauseAnimation();player?.clear()}catch{}player=null;video=null;previewId='';togglePlaying(false);$('stage').replaceChildren();$('stage-wrap').hidden=true;$('preview-empty').hidden=false;$('canvas-tag').hidden=true;$('loading-preview').hidden=true;for(const id of ['play','previous','next','timeline','loop'])$(id).disabled=true;$('timeline').value=0;$('frame-number').textContent='—';$('time').textContent=$('duration').textContent='00:00.00';const file=current();$('preview-empty').querySelector('h3').textContent=file?.error?'这个文件暂时无法预览':(toolDefinitions[state.activeTool||'svga-pag']?.empty||'让动效，换个格式。');$('preview-empty').querySelector('p').textContent=file?.error?'请查看右侧的具体原因，或选择其他文件。':toolDefinitions[state.activeTool||'svga-pag'].hint}
 function loadPreview(payload){
  if(payload.id!==state.selectedId)return;
  $('media-preview').hidden=true;$('playback').hidden=false;
- if(payload.kind==='pag-gif'){loadPAGPreview(payload);return}
+ if(payload.kind?.startsWith('pag-')){loadPAGPreview(payload);return}
  const seq=++previewSeq;try{player?.pauseAnimation();player?.clear()}catch{}player=null;video=null;previewId=payload.id;
  $('stage').replaceChildren();$('preview-empty').hidden=true;$('loading-preview').hidden=false;$('stage-wrap').hidden=false;
  const local=new SVGA.Player('#stage'),parser=new SVGA.Parser('#stage');
@@ -125,28 +125,48 @@ $('zoom').onchange=resizeStage;new ResizeObserver(resizeStage).observe($('canvas
 for(const b of document.querySelectorAll('[data-bg]'))b.onclick=()=>{$('canvas').className='canvas '+b.dataset.bg;document.querySelectorAll('[data-bg]').forEach(x=>x.classList.toggle('selected',x===b))};
 let dragDepth=0;window.addEventListener('dragenter',e=>{e.preventDefault();dragDepth++;$('drop-overlay').hidden=false});window.addEventListener('dragleave',e=>{e.preventDefault();if(--dragDepth<=0){dragDepth=0;$('drop-overlay').hidden=true}});window.addEventListener('dragover',e=>e.preventDefault());window.addEventListener('drop',e=>{e.preventDefault();dragDepth=0;$('drop-overlay').hidden=true});
 document.addEventListener('keydown',e=>{if(e.target.matches('input,textarea,select')||$('help-dialog').open)return;if(e.code==='Space'&&player){e.preventDefault();$('play').click()}else if(e.key==='ArrowLeft'){e.preventDefault();step(-1)}else if(e.key==='ArrowRight'){e.preventDefault();step(1)}else if(e.key==='?'&&!e.metaKey){e.preventDefault();$('help-dialog').showModal()}else if((e.key==='Backspace'||e.key==='Delete')&&state.selectedId){e.preventDefault();post('remove',{id:state.selectedId})}});
+function renderEmptyArtwork(mode,def){
+ const art=document.querySelector('#preview-empty .format-art');if(art.dataset.emptyTool===mode)return;art.dataset.emptyTool=mode;
+ const card=(label,kind)=>`<div class="empty-source"><span>${label}</span>${icon(kind)}</div>`;
+ if(mode==='mp3'){
+  art.dataset.kind='audio';
+  const wave=compact=>`<div class="empty-wave ${compact?'compact':''}">${[12,23,36,19,43,30,48,25,38,18,30,14].map(h=>`<i style="height:${h}px"></i>`).join('')}</div>`;
+  art.innerHTML=`<div class="empty-audio-label">MP3</div>${wave(false)}<div class="empty-compress">${icon('arrow')}</div>${wave(true)}<span class="empty-audio-caption">更小体积，轻松播放</span>`;
+ }else if(mode.endsWith('-png')){
+  art.dataset.kind='sequence';
+  art.innerHTML=card(def.input,mode==='mp4-png'?'video':'play')+`<div class="empty-flow">${icon('arrow')}</div><div class="empty-sequence">${[1,2,3].map(n=>`<div class="empty-page">${icon('images')}<span>PNG <small>${String(n).padStart(3,'0')}</small></span></div>`).join('')}</div>`;
+ }else{
+  art.dataset.kind=mode.endsWith('-gif')?'gif':'pag';
+  art.innerHTML=card(def.input,'play')+`<div class="empty-flow">${icon('arrow')}</div><div class="empty-destination">${icon(mode.endsWith('-gif')?'retry':'grid')}<span>${def.output}</span>${mode.endsWith('-gif')?'<small>循环播放</small>':''}</div>`;
+ }
+}
+
 const toolDefinitions={
  'svga-pag':{title:'SVGA → PAG',subtitle:'保留透明背景，迁移动效素材。',input:'SVGA',output:'PAG',empty:'让动效，换个格式。',hint:'添加 SVGA，预览后转换为 PAG。原图层会合并。',technical:'统一使用视频压缩，保留原尺寸、帧率与透明背景。小体积沿用旧版参数；向均衡调节只适度提高编码品质，改善幅度取决于素材。不再输出大体积逐帧无损序列。原图层仍会合并，支持无音轨的 SVGA 2.x。'},
  'svga-gif':{title:'SVGA → GIF',subtitle:'让动效走出播放器，方便分享与预览。',input:'SVGA',output:'GIF',empty:'让动效，随处播放。',hint:'添加 SVGA，选择尺寸、帧率和背景，导出循环 GIF。',technical:'GIF 无音轨，最多 256 色，只支持完全透明或不透明。白底或黑底可以保留柔和的半透明边缘。'},
  'pag-gif':{title:'PAG → GIF',subtitle:'逐帧读取 PAG，导出可分享的 GIF。',input:'PAG',output:'GIF',empty:'把 PAG，变成 GIF。',hint:'添加 PAG，预览真实画面，再导出循环 GIF。',technical:'GIF 无音轨，最多 256 色，只支持完全透明或不透明。PAG 字体会使用本机字体；复杂视频或缺失字体可能影响效果。'},
  'mp3':{title:'MP3 压缩',subtitle:'让声音更轻，尽量保留听感。',input:'MP3',output:'MP3',empty:'更轻的文件，熟悉的声音。',hint:'添加 MP3，选择压缩策略。处理后可对比试听原音频和结果。',technical:'低档优先缩小体积；中档自动选择 VBR 或复制低码率音频；100% 直接复制原音频流，避免再次损失音质。不能修复源文件已有的失真。清理封面与元数据；若结果更大，保留原文件。'},
+ 'svga-png':{title:'SVGA → PNG 序列',subtitle:'逐帧导出透明图片，保留动画细节。',input:'SVGA',output:'PNG 序列',empty:'把 SVGA，展开成每一帧。',hint:'添加 SVGA，按原帧率或指定帧率导出透明 PNG，自动编号保存。',technical:'PNG 为无损图片，保留透明背景，不包含音频。默认导出全部原始帧；指定帧率最高不超过原动画帧率，降低尺寸会重采样。'},
+ 'pag-png':{title:'PAG → PNG 序列',subtitle:'读取 PAG 真实画面，逐帧保存透明图片。',input:'PAG',output:'PNG 序列',empty:'把 PAG，逐帧保存。',hint:'添加 PAG，预览后导出透明 PNG 序列，自动编号保存。',technical:'PNG 为无损图片，保留透明背景，不包含音频。指定帧率最高不超过原动画帧率。PAG 字体使用本机字体；缺失字体、源文件压缩和视频兼容性可能影响渲染结果。'},
  'mp4-png':{title:'MP4 → PNG 序列',subtitle:'把每一帧，变成一张可用的图片。',input:'MP4',output:'PNG 序列',empty:'让视频，逐帧展开。',hint:'添加 MP4，保留全部帧或指定提取帧率，导出自动编号的 PNG。',technical:'PNG 为无损图片，不包含音频。原始帧模式保留解码画面；降低尺寸会重采样。可变帧率视频的总帧数在处理前为估算值。'}
 };
 function renderTool(){
  const mode=state.activeTool||'svga-pag',def=toolDefinitions[mode],i=current()?.info,s=state.settings||{};
  $('tool-title').textContent=def.title;$('tool-subtitle').textContent=def.subtitle;$('queue-format').textContent=def.input==='SVGA'?'SVGA 2.x':def.input;
- $('output-format').textContent=def.output;$('settings-title').textContent=mode==='mp3'?'压缩设置':'转换设置';$('technical-title').textContent=mode==='mp3'?'音质与体积说明':mode==='mp4-png'?'帧数与画质说明':'格式与兼容说明';$('technical-text').textContent=def.technical;
+ $('output-format').textContent=def.output;$('settings-title').textContent=mode==='mp3'?'压缩设置':'转换设置';$('technical-title').textContent=mode==='mp3'?'音质与体积说明':mode.endsWith('-png')?'帧数与画质说明':'格式与兼容说明';$('technical-text').textContent=def.technical;
  document.querySelector('.preview-options').hidden=['mp3','mp4-png'].includes(mode);$('canvas').classList.toggle('media-canvas',['mp3','mp4-png'].includes(mode));$('preview-heading').textContent=mode==='mp3'?'音频预览':mode==='mp4-png'?'视频预览':'动画预览';
- $('options-svga').hidden=mode!=='svga-pag';$('options-mp3').hidden=mode!=='mp3';$('options-gif').hidden=!mode.endsWith('-gif');$('options-png').hidden=mode!=='mp4-png';
+ $('options-svga').hidden=mode!=='svga-pag';$('options-mp3').hidden=mode!=='mp3';$('options-gif').hidden=!mode.endsWith('-gif');$('options-png').hidden=!mode.endsWith('-png');
  document.querySelectorAll('[data-tool]').forEach(b=>b.classList.toggle('active-tool',b.dataset.tool===mode));
  for(const control of document.querySelectorAll('[data-setting]')){control.disabled=state.busy;if(s[control.dataset.setting]!==undefined&&document.activeElement!==control)control.value=String(s[control.dataset.setting])}
  renderQuality();
  $('quality-hint').textContent=i&&i.bitrate>0?`源音频约 ${Math.round(i.bitrate/1000)} kbps。实际体积与听感取决于源文件。`:'处理后可对比试听原音频和压缩结果。';
  const estimate=$('export-estimate');estimate.hidden=!i||mode==='svga-pag';
  if(i&&mode.endsWith('-gif')){const scale=s.gifSize?Math.min(1,s.gifSize/Math.max(i.width,i.height)):1,fps=Math.min(s.gifFPS||15,i.fps);estimate.textContent=`${Math.floor(i.width*scale)} × ${Math.floor(i.height*scale)} · ${fps} fps · 约 ${Math.ceil(i.duration*fps)} 帧`}
- else if(i&&mode==='mp4-png'){estimate.textContent=s.pngFPS?`预计 ${Math.ceil(i.duration*s.pngFPS)} 张 PNG`:`预计 ${i.frames} 张 PNG · 保留全部原始帧`}
+ else if(i&&mode.endsWith('-png')){const fps=s.pngFPS?(mode==='mp4-png'?s.pngFPS:Math.min(s.pngFPS,i.fps)):i.fps;estimate.textContent=`预计 ${s.pngFPS?Math.ceil(i.duration*fps):i.frames} 张 PNG · ${fps} fps`; }
  else if(i&&mode==='mp3'){estimate.textContent='压缩效果取决于源音频，完成后显示实际大小。'}
  $('queue-empty').querySelector('p').textContent='还没有 '+def.input+' 文件';
+ $('add-canvas').innerHTML=icon('add')+'选择 '+def.input+' 文件';renderEmptyArtwork(mode,def);
+ $('options-png').querySelector('.option-hint').textContent=mode==='mp4-png'?'每帧保存一张 PNG，自动编号。长视频可能占用较多磁盘空间。':'保留透明背景，自动编号保存。提取帧率最高不超过原动画帧率。';
  const caption=document.querySelector('.preview-caption>span:nth-child(2)');caption.textContent=mode==='mp3'?'原音频预览':mode==='mp4-png'?'原视频预览':'原动画预览';document.querySelector('.caption-right').hidden=['mp3','mp4-png'].includes(mode);
 }
 for(const button of document.querySelectorAll('[data-tool]'))button.onclick=()=>{filter='all';post('setTool',{tool:button.dataset.tool})};
@@ -185,12 +205,12 @@ async function loadPAGPreview(payload){
 
 render();post('ready');
 
-function settingsKey(tool){const s=state.settings||{};if(tool==='svga-pag')return 'pag-video:'+(s.pagQuality??0);if(tool==='mp3')return 'mp3:'+(s.audioQuality??50);if(tool.endsWith('-gif'))return ['gif',s.gifQuality??50,s.gifFPS??15,s.gifSize??480,s.background??'white'].join(':');if(tool==='mp4-png')return ['png',s.pngFPS??0,s.pngSize??0].join(':');return tool}
+function settingsKey(tool){const s=state.settings||{};if(tool==='svga-pag')return 'pag-video:'+(s.pagQuality??0);if(tool==='mp3')return 'mp3:'+(s.audioQuality??50);if(tool.endsWith('-gif'))return ['gif',s.gifQuality??50,s.gifFPS??15,s.gifSize??480,s.background??'white'].join(':');if(tool.endsWith('-png'))return ['png',s.pngFPS??0,s.pngSize??0].join(':');return tool}
 function exportJobs(){const tool=state.activeTool||'svga-pag',jobs=state.files.filter(f=>f.tool===tool&&(f.status==='ready'||f.status==='done'&&f.resultSettingsKey!==settingsKey(tool)));if(jobs.length)return jobs;const f=current();return f?.tool===tool&&f.status==='done'?[f]:[]}
 function qualityField(){return state.activeTool==='mp3'?'audioQuality':state.activeTool?.endsWith('-gif')?'gifQuality':'pagQuality'}
 function renderQuality(){
  const tool=state.activeTool||'svga-pag',pag=tool==='svga-pag',q=Number(state.settings?.[qualityField()]??(pag?0:50)),level=pag?(q===0?'小体积':q<75?'偏小体积':'均衡'):(q<25?'低':q<75?'中':'高'),slider=$('output-quality');
- $('output-quality-control').hidden=tool==='mp4-png';$('output-quality-label').textContent=tool==='mp3'?'输出音质':'输出画质';$('output-quality-value').textContent=pag?level:level+' · '+q+'%';
+ $('output-quality-control').hidden=tool.endsWith('-png');$('output-quality-label').textContent=tool==='mp3'?'输出音质':'输出画质';$('output-quality-value').textContent=pag?level:level+' · '+q+'%';
  if(document.activeElement!==slider)slider.value=String(q);slider.style.setProperty('--quality-fill',q+'%');slider.setAttribute('aria-valuetext',pag?level:`${level}，${q}%`);slider.disabled=state.busy;
  [...document.querySelectorAll('[data-quality]')].forEach((button,index)=>{const value=pag?[0,100,100][index]:[0,50,100][index];button.dataset.quality=String(value);button.hidden=pag&&index===2;button.innerHTML=pag?['小体积','均衡',''][index]:['低 <span>0%</span>','中 <span>50%</span>','高 <span>100%</span>'][index];button.disabled=state.busy;button.classList.toggle('selected',value===q);button.setAttribute('aria-pressed',String(value===q));});
  let hint='';

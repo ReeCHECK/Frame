@@ -1,4 +1,4 @@
-# Frame 3.2 开发说明
+# Frame 3.3 开发说明
 
 `Frame.swift` 包含 AppKit 宿主、AVFoundation / AVKit 媒体元数据与预览、队列管理、系统 WebKit 动效渲染、PAG 编码与 FFmpeg 子进程调用。`ui/` 为工作台 HTML、样式、交互和渲染页面。
 
@@ -56,3 +56,9 @@ UI 的 pagQuality 0..100 仅为“小体积—均衡”内部插值，映射编�
 这里 100 对应新的“均衡”端点，不是无损。测试在同一个 App 会话里完成两个档位的导出，并测试完成状态可重新处理和同名自动编号。
 
 本机重建使用显式 SDK、macosx 目标 triple 和 VFS overlay 隔离 SwiftBridging 重复模块声明，不修改系统工具链。
+
+## 3.3 PNG 序列导出
+
+新增 svga-png / pag-png 工具；默认逐帧原尺寸导出，保留 alpha。设置 pngFPS / pngSize 后可重新导出。动画提取帧率不超过源帧率。PAG 离屏导出设置 useScale:false，防止 Retina 屏幕将实际像素尺寸放大。结果按 frame_000000.png 编号，每次导出独立文件夹。
+
+原生集成测试支持 --smoke-reexport-png-fps 和 --smoke-reexport-png-size，在同一会话变更设置并再次导出。

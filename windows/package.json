@@ -1,7 +1,7 @@
 {
   "name": "frame-windows-build",
   "private": true,
-  "version": "3.2.0",
+  "version": "3.3.0",
   "type": "commonjs",
   "devDependencies": {
     "@electron/asar": "^4.3.1",

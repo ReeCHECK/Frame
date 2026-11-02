@@ -11,7 +11,7 @@ window.loadAnimation=base64=>new Promise((resolve,reject)=>{
 window.loadPAG=async(base64,wasm)=>{
  sourceType='pag';window.pagPhase="initializing";const PAG=await libpag.PAGInit({wasmBinary:decode64(wasm)});window.pagPhase="loading file";const data=decode64(base64),file=await PAG.PAGFile.load(data.buffer);
  const stage=document.getElementById('render'),canvas=document.createElement('canvas');canvas.width=file.width();canvas.height=file.height();stage.replaceChildren(canvas);
- window.pagPhase="creating view";pagView=await PAG.PAGView.init(file,canvas,{useCanvas2D:true,firstFrame:false});window.pagPhase="ready";
+ window.pagPhase="creating view";pagView=await PAG.PAGView.init(file,canvas,{useCanvas2D:true,useScale:false,firstFrame:false});window.pagPhase="ready";
  return {width:file.width(),height:file.height(),fps:file.frameRate(),duration:file.duration()/1e6};
 };
 window.renderFrame=async(index,progress)=>{

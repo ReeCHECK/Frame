@@ -190,7 +190,7 @@ final class EncoderLog: @unchecked Sendable {
         appMenu.addItem(withTitle:"关于 Frame",action:#selector(about),keyEquivalent:"")
         appMenu.addItem(.separator());appMenu.addItem(withTitle:"退出 Frame",action:#selector(NSApplication.terminate(_:)),keyEquivalent:"q")
         let fileItem=NSMenuItem();main.addItem(fileItem);let fileMenu=NSMenu(title:"文件");fileItem.submenu=fileMenu
-        fileMenu.addItem(withTitle:"添加 SVGA…",action:#selector(chooseFiles),keyEquivalent:"o")
+        fileMenu.addItem(withTitle:"添加文件…",action:#selector(chooseFiles),keyEquivalent:"o")
         let folder=fileMenu.addItem(withTitle:"选择输出位置…",action:#selector(chooseOutput),keyEquivalent:"o");folder.keyEquivalentModifierMask=[.command,.shift]
         fileMenu.addItem(.separator());fileMenu.addItem(withTitle:"开始转换",action:#selector(startAll),keyEquivalent:"\r")
         fileMenu.addItem(withTitle:"关闭窗口",action:#selector(NSWindow.performClose(_:)),keyEquivalent:"w")
@@ -201,7 +201,7 @@ final class EncoderLog: @unchecked Sendable {
         NSApp.mainMenu=main
         for menu in [appMenu,fileMenu,help] { for item in menu.items where item.action != #selector(NSApplication.terminate(_:)) && item.action != #selector(NSWindow.performClose(_:)) { item.target=self } }
     }
-    @objc func about() { let alert=NSAlert();alert.messageText="Frame";alert.informativeText="本地媒体工具箱 3.2\nSVGA / PAG / MP3 / MP4\n本地处理，无需 Node.js 或 Chrome。\n基于 SVGAPlayer-Web 与腾讯 PAGConvertor。";alert.addButton(withTitle:"好");alert.runModal() }
+    @objc func about() { let alert=NSAlert();alert.messageText="Frame";alert.informativeText="本地媒体工具箱 3.3\nSVGA / PAG / MP3 / MP4\n本地处理，无需 Node.js 或 Chrome。\n基于 SVGAPlayer-Web 与腾讯 PAGConvertor。";alert.addButton(withTitle:"好");alert.runModal() }
     @objc func showHelp() { send(["type":"help"]) }
     @objc func chooseFiles() {
         let panel=NSOpenPanel();panel.title="添加文件 · \(toolNames[activeTool] ?? "Frame")";panel.prompt="添加";panel.allowsMultipleSelection=true;panel.canChooseDirectories=false
@@ -265,7 +265,7 @@ final class EncoderLog: @unchecked Sendable {
         for url in urls {
             let ext=url.pathExtension.lowercased()
             guard ["svga","pag","mp3","mp4"].contains(ext) else { ignored += 1;continue }
-            let tool:String=ext=="svga" ? (activeTool=="svga-gif" ? "svga-gif":"svga-pag") : (["pag":"pag-gif","mp3":"mp3","mp4":"mp4-png"][ext] ?? activeTool)
+            let tool:String=toolExtensions[activeTool]==ext ? activeTool : (["svga":"svga-pag","pag":"pag-gif","mp3":"mp3","mp4":"mp4-png"][ext] ?? activeTool)
             guard !entries.contains(where:{$0.url.standardizedFileURL==url.standardizedFileURL && $0.tool==tool}) else { continue }
             guard entries.count<100 else { ignored += 1;continue }
             let size=(try? url.resourceValues(forKeys:[.fileSizeKey]).fileSize) ?? 0
@@ -276,9 +276,9 @@ final class EncoderLog: @unchecked Sendable {
         Task {
             for e in added {
                 do {
-                    guard e.bytes>0 && e.bytes <= (["mp3","mp4-png"].contains(e.tool) ? 2_147_483_648:e.tool=="pag-gif" ? 256*1024*1024:64*1024*1024) else { throw FrameError("文件为空或超出大小限制；音视频最大 2 GB，PAG 最大 256 MB，SVGA 最大 64 MB。") }
+                    guard e.bytes>0 && e.bytes <= (["mp3","mp4-png"].contains(e.tool) ? 2_147_483_648:e.tool.hasPrefix("pag-") ? 256*1024*1024:64*1024*1024) else { throw FrameError("文件为空或超出大小限制；音视频最大 2 GB，PAG 最大 256 MB，SVGA 最大 64 MB。") }
                     let info:AnimationInfo
-                    if e.tool=="pag-gif" {
+                    if e.tool.hasPrefix("pag-") {
                         let renderer=RenderEngine(root:root,host:web);defer { renderer.view.removeFromSuperview() };try await renderer.load(root:root)
                         let data=try Data(contentsOf:e.url)
                         guard String(data:data.prefix(3),encoding:.ascii)=="PAG" else { throw FrameError("不是有效的 PAG 文件。") }
@@ -287,7 +287,7 @@ final class EncoderLog: @unchecked Sendable {
                         guard w>0 && h>0 && w<=4096 && h<=4096 && fps>0 && fps<=120 && duration>0 && duration<=600 else { throw FrameError("PAG 参数无效或超出范围。") }
                         info=AnimationInfo(width:w,height:h,fps:Int(fps.rounded()),frames:Int(ceil(duration*fps)),seconds:duration,nominalFPS:fps)
                     } else if ["mp3","mp4-png"].contains(e.tool) { info=try await inspectMedia(e.url,kind:e.tool) }
-                    else { let url=e.url,allow=e.tool=="svga-gif";info=try await Task.detached(priority:.userInitiated) { try inspectSVGA(Data(contentsOf:url),allowAudio:allow) }.value }
+                    else { let url=e.url,allow=e.tool != "svga-pag";info=try await Task.detached(priority:.userInitiated) { try inspectSVGA(Data(contentsOf:url),allowAudio:allow) }.value }
                     guard entries.contains(where:{$0.id==e.id}) else { continue }
                     e.info=info;e.status="ready";e.stage="等待处理"
                     if selected==e.id { loadPreview(e) }
@@ -310,7 +310,7 @@ final class EncoderLog: @unchecked Sendable {
         }
         guard let data=try? Data(contentsOf:e.url) else { send(["type":"clearPreview"]);return }
         var payload:[String:Any] = ["type":"preview","id":e.id,"name":e.url.lastPathComponent,"base64":data.base64EncodedString(),"kind":e.tool]
-        if e.tool=="pag-gif" { payload["wasm"]=(try? Data(contentsOf:root.appendingPathComponent("vendor/libpag.wasm")).base64EncodedString()) ?? "" }
+        if e.tool.hasPrefix("pag-") { payload["wasm"]=(try? Data(contentsOf:root.appendingPathComponent("vendor/libpag.wasm")).base64EncodedString()) ?? "" }
         send(payload)
     }
     @objc func startAll() {
@@ -341,6 +341,11 @@ final class EncoderLog: @unchecked Sendable {
                 else {
                     let output=entries.first?.output?.path ?? "";print("SMOKE PASSED: \(output)");fflush(stdout)
                     let args=CommandLine.arguments
+                    if !smokeReexported,activeTool.hasSuffix("-png"),let i=args.firstIndex(of:"--smoke-reexport-png-fps"),i+1<args.count,let value=Int(args[i+1]),[0,1,5,10,15,24,30,60].contains(value) {
+                        smokeReexported=true;settings.pngFPS=value
+                        if let j=args.firstIndex(of:"--smoke-reexport-png-size"),j+1<args.count,let size=Int(args[j+1]),[0,480,720,1080,1920].contains(size) {settings.pngSize=size}
+                        print("SMOKE REEXPORT PNG");startAll();return
+                    }
                     if !smokeReexported,let i=args.firstIndex(of:"--smoke-reexport-quality"),i+1<args.count,let value=Int(args[i+1]),(0...100).contains(value) {
                         smokeReexported=true
                         if activeTool=="svga-pag" {settings.pagQuality=value};if activeTool.hasSuffix("-gif") {settings.gifQuality=value};if activeTool=="mp3" {settings.audioQuality=value}
@@ -424,14 +429,14 @@ struct ToolSettings {
         case "svga-pag":return "pag-video:\(pagQuality)"
         case "mp3":return "mp3:\(audioQuality)"
         case "svga-gif","pag-gif":return "gif:\(gifQuality):\(gifFPS):\(gifSize):\(background)"
-        case "mp4-png":return "png:\(pngFPS):\(pngSize)"
+        case "mp4-png","svga-png","pag-png":return "png:\(pngFPS):\(pngSize)"
         default:return tool
         }
     }
     var json:[String:Any] { ["quality":quality,"gifFPS":gifFPS,"gifSize":gifSize,"background":background,"pngFPS":pngFPS,"pngSize":pngSize,"pagQuality":pagQuality,"gifQuality":gifQuality,"audioQuality":audioQuality] }
 }
-let toolExtensions=["svga-pag":"svga","svga-gif":"svga","pag-gif":"pag","mp3":"mp3","mp4-png":"mp4"]
-let toolNames=["svga-pag":"SVGA → PAG","svga-gif":"SVGA → GIF","pag-gif":"PAG → GIF","mp3":"MP3 压缩","mp4-png":"MP4 → PNG 序列"]
+let toolExtensions=["svga-pag":"svga","svga-gif":"svga","pag-gif":"pag","svga-png":"svga","pag-png":"pag","mp3":"mp3","mp4-png":"mp4"]
+let toolNames=["svga-pag":"SVGA → PAG","svga-gif":"SVGA → GIF","pag-gif":"PAG → GIF","svga-png":"SVGA → PNG 序列","pag-png":"PAG → PNG 序列","mp3":"MP3 压缩","mp4-png":"MP4 → PNG 序列"]
 
 func inspectMedia(_ url:URL,kind:String) async throws -> AnimationInfo {
     let asset=AVURLAsset(url:url),duration=try await asset.load(.duration).seconds
@@ -560,6 +565,33 @@ func inspectMedia(_ url:URL,kind:String) async throws -> AnimationInfo {
             guard !(try FileManager.default.contentsOfDirectory(atPath:frames.path)).isEmpty else { throw FrameError("没有提取到视频帧。") }
             entry.resultNote=settings.pngFPS==0 ? "逐帧导出原视频；PNG 不包含声音。":"已按 \(settings.pngFPS) fps 导出；PNG 不包含声音。"
             try publish(frames,entry:entry,stem:stem+"-PNG",ext:"",directory:true);return
+        }
+        if ["svga-png","pag-png"].contains(entry.tool) {
+            let fps=settings.pngFPS>0 ? min(Double(settings.pngFPS),info.frameRate) : info.frameRate
+            let count=settings.pngFPS>0 ? max(1,Int(ceil(info.duration*fps))) : info.frames
+            guard count<=30000 && Double(info.width)*Double(info.height)*Double(count)<=1_500_000_000 else { throw FrameError("PNG 渲染量较大，请降低提取帧率或缩短动画。") }
+            let frames=temp.appendingPathComponent("frames",isDirectory:true);try FileManager.default.createDirectory(at:frames,withIntermediateDirectories:true)
+            let renderer=RenderEngine(root:root,host:web);engine=renderer;try await renderer.load(root:root)
+            let actual=try await renderer.prepare(Data(contentsOf:entry.url),pag:entry.tool.hasPrefix("pag-"),root:root)
+            guard (actual["width"] as? NSNumber)?.intValue==info.width && (actual["height"] as? NSNumber)?.intValue==info.height else { throw FrameError("播放器读取的尺寸不一致。") }
+            for index in 0..<count {
+                if stopRequested { throw CancellationError() }
+                let seconds=Double(index)/fps,sourceFrame=settings.pngFPS==0 ? index : min(info.frames-1,Int((seconds*info.frameRate+0.0000001).rounded(.down)))
+                let sampleTime=entry.tool=="pag-png" ? (Double(sourceFrame)+0.5)/info.frameRate : seconds
+                let png=try await renderer.frame(sourceFrame,progress:min(0.999999,sampleTime/info.duration))
+                try png.write(to:frames.appendingPathComponent(String(format:"frame_%06d.png",index)))
+                entry.progress=5+Int(Double(index+1)/Double(count)*65);entry.stage="渲染 PNG · \(index+1)/\(count) 帧";if index%2==0 || index+1==count { snapshot() }
+            }
+            let factor=settings.pngSize>0 ? min(1,Double(settings.pngSize)/Double(max(info.width,info.height))) : 1
+            let width=max(1,Int(Double(info.width)*factor)),height=max(1,Int(Double(info.height)*factor))
+            var folder=frames
+            if factor<1 {
+                folder=temp.appendingPathComponent("PNG",isDirectory:true);try FileManager.default.createDirectory(at:folder,withIntermediateDirectories:true)
+                try await runFFmpeg(["-framerate",String(fps),"-start_number","0","-i",frames.appendingPathComponent("frame_%06d.png").path,"-vf","scale=\(width):\(height):flags=lanczos","-frames:v",String(count),"-pix_fmt","rgba","-start_number","0","-c:v","png",folder.appendingPathComponent("frame_%06d.png").path],entry:entry,stage:"缩放 PNG 序列",range:71...97)
+            }
+            if stopRequested { throw CancellationError() }
+            entry.resultNote="\(width)×\(height) · \(String(format:"%g",fps)) fps · 保留透明背景；PNG 不含声音。"
+            try publish(folder,entry:entry,stem:stem+"-PNG",ext:"",directory:true);return
         }
         // GIF rendering samples the source timeline at a bounded output frame rate.
         let frames=temp.appendingPathComponent("frames",isDirectory:true);try FileManager.default.createDirectory(at:frames,withIntermediateDirectories:true)

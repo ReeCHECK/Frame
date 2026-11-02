@@ -6,7 +6,7 @@ APP_SOURCE="${FRAME_BASE_APP:?Set FRAME_BASE_APP to the extracted Frame.app from
 [[ -d "$APP_SOURCE/Contents/Resources" ]] || { print -u2 "Invalid FRAME_BASE_APP"; exit 1; }
 APP_TARGET="$BUILD_ROOT/Frame.app"
 mkdir -p "$BUILD_ROOT/ModuleCache" "$APP_TARGET/Contents/MacOS"
-cp "$APP_SOURCE/Contents/Info.plist" "$APP_TARGET/Contents/Info.plist"
+cp "$SOURCE_ROOT/Info.plist" "$APP_TARGET/Contents/Info.plist"
 cp -R "$APP_SOURCE/Contents/Resources" "$APP_TARGET/Contents/"
 python3 - "$SOURCE_ROOT" "$APP_TARGET" <<'PY'
 from pathlib import Path

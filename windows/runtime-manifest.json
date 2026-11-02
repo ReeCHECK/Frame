@@ -1,6 +1,6 @@
 {
   "product": "Frame",
-  "version": "3.2.0",
+  "version": "3.3.0",
   "platform": "win32",
   "arch": "x64",
   "electron": {
@@ -20,6 +20,8 @@
       "SVGA-PAG",
       "SVGA-GIF",
       "PAG-GIF",
+      "SVGA-PNG",
+      "PAG-PNG",
       "MP3",
       "MP4-PNG"
     ],
@@ -31,11 +33,11 @@
   "files": {
     "Frame.exe": {
       "bytes": 250046976,
-      "sha256": "5c23daac3366c37ecd66004dcf3b4c6e3ff4c678420645a43a9cea3988f8f190"
+      "sha256": "85a8e9667dc87b71f5b4c95d43a170499b5981c89d6159bbcff001e031469fd3"
     },
     "resources/app.asar": {
-      "bytes": 3573232,
-      "sha256": "a4ce1e205c2c7ee5b0b11d223f815e386d6bf84e07614380ca9b16993dafbc88"
+      "bytes": 3590277,
+      "sha256": "c1547c733a9c90c5f9fcfb69e1ddce4c4e013c81b17cd6ff9d90e2eaf5d853f6"
     },
     "resources/bin/ffmpeg.exe": {
       "bytes": 551424,
