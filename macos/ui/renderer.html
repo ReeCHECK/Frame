@@ -1,4 +1,4 @@
-<!doctype html><meta charset="utf-8"><style>html,body{margin:0}#render{width:750px;height:750px}</style><div id="render"></div><script src="../vendor/svga.min.js"></script><script src="../vendor/libpag.js"></script><script>
+<!doctype html><meta charset="utf-8"><style>html,body{margin:0}#render{width:750px;height:750px}</style><div id="render"></div><script src="../vendor/images/image-codecs.js"></script><script src="image-renderer.js"></script><script src="../vendor/svga.min.js"></script><script src="../vendor/libpag.js"></script><script>
 window.__FRAME_OFFSCREEN_RENDERER=true;window.requestAnimationFrame=callback=>setTimeout(()=>callback(performance.now()),16);window.cancelAnimationFrame=id=>clearTimeout(id);
 let sourceType='svga',renderPlayer,pagView;
 const decode64=s=>Uint8Array.from(atob(s),c=>c.charCodeAt(0));

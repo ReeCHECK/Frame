@@ -24,3 +24,7 @@ The MIT license at the repository root applies to Frame-owned source only. Bundl
   - Extract source under macos/codecs/deps/, create macos/codecs/build/, run build-lame.sh and then build-ffmpeg.sh on macOS. Release packages also include source archives and licenses. FFmpeg is replaceable as an independent subprocess; re-sign the app after replacing it.
 
 The Frame logo asset is included with this project. Third-party names are used for attribution; no endorsement is implied.
+
+## Image compression codecs (Frame 3.4)
+
+@jsquash/webp 1.5.0 and @jsquash/oxipng 2.3.0: https://github.com/jamsinclair/jSquash — Apache-2.0 wrappers with their own codec licenses. License copies: windows/app/licenses/jsquash-*-LICENSE.txt and jsquash-*-codec-LICENSE.md. WebP uses libwebp; PNG uses OxiPNG. Only the single-threaded local WASM builds are bundled, with no service or CDN dependency. Bundle entry: windows/image-codecs-entry.mjs; builder: windows/build-image-codecs.cjs. esbuild is used only during development.

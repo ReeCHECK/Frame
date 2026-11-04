@@ -9,7 +9,7 @@ parser.add_argument('--browser', required=True)
 parser.add_argument('--screenshots')
 args = parser.parse_args()
 bridge = """window.webkit={messageHandlers:{frame:{postMessage(body){
- if(body.action==='setTool')window.receive({type:'state',files:[],selectedId:'',busy:false,outputDir:'',activeTool:body.tool,settings:{pngFPS:0,pngSize:0,pagQuality:0,gifQuality:50,audioQuality:50,gifFPS:15,gifSize:480,background:'white'}});
+ if(body.action==='setTool')window.receive({type:'state',files:[],selectedId:'',busy:false,outputDir:'',activeTool:body.tool,settings:{imageQuality:50,imageSize:0,imageFormat:'original',pngFPS:0,pngSize:0,pagQuality:0,gifQuality:50,audioQuality:50,gifFPS:15,gifSize:480,background:'white'}});
 }}}};"""
 with sync_playwright() as p:
     browser = p.chromium.launch(executable_path=args.browser, headless=True)
@@ -21,22 +21,22 @@ with sync_playwright() as p:
         page.goto(Path(args.page).resolve().as_uri(), wait_until='networkidle')
         for width, height in [(1240, 820), (900, 560)]:
             page.set_viewport_size({'width': width, 'height': height})
-            for tool in ['svga-pag', 'svga-gif', 'pag-gif', 'svga-png', 'pag-png', 'mp3', 'mp4-png']:
+            for tool in ['svga-pag', 'svga-gif', 'pag-gif', 'svga-png', 'pag-png', 'image', 'mp3', 'mp4-png']:
                 page.locator(f'button[data-tool="{tool}"]').click()
                 assert page.locator('button.active-tool').count() == 1
-                assert page.locator('.format-art').get_attribute('data-empty-tool') == tool
-                expected_input = 'MP3' if tool == 'mp3' else tool.split('-')[0].upper()
+                assert page.locator('.format-art').get_attribute('data-empty-tool') == tool, (width, height, tool, errors)
+                expected_input = '图片' if tool == 'image' else 'MP3' if tool == 'mp3' else tool.split('-')[0].upper()
                 assert expected_input in page.locator('#add-canvas').inner_text()
-                assert expected_input in page.locator('#preview-empty p').inner_text()
+                assert ('WebP' if tool == 'image' else expected_input) in page.locator('#preview-empty p').inner_text()
                 canvas = page.locator('#canvas').bounding_box()
                 action = page.locator('#add-canvas').bounding_box()
                 assert canvas and action and action['y'] >= canvas['y']
                 assert action['y'] + action['height'] <= canvas['y'] + canvas['height'] + 1, (width, height, tool, canvas, action)
                 assert page.locator('#convert').is_visible()
-                if args.screenshots and tool in ['svga-png', 'mp3']:
+                if args.screenshots and tool in ['svga-png', 'mp3', 'image']:
                     folder = Path(args.screenshots); folder.mkdir(parents=True, exist_ok=True)
                     page.screenshot(path=str(folder / f'{tool}-{width}x{height}.png'))
         assert errors == [], errors
-        print('PASS: seven matching empty states at 1240×820 and 900×560; import action fits canvas; no script errors.')
+        print('PASS: eight matching empty states at 1240×820 and 900×560; import action fits canvas; no script errors.')
     finally:
         browser.close()

@@ -1,11 +1,14 @@
 {
   "name": "frame-windows-build",
   "private": true,
-  "version": "3.3.0",
+  "version": "3.4.0",
   "type": "commonjs",
   "devDependencies": {
     "@electron/asar": "^4.3.1",
+    "@jsquash/oxipng": "2.3.0",
+    "@jsquash/webp": "1.5.0",
     "7zip-bin": "^5.2.0",
+    "esbuild": "0.25.12",
     "png-to-ico": "^3.0.2",
     "resedit": "^3.1.0"
   },

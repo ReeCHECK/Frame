@@ -10,9 +10,10 @@ struct AnimationInfo {
     var width: Int, height: Int, fps: Int, frames: Int
     var seconds: Double=0, nominalFPS: Double=0
     var bitrate=0, sampleRate=0, channels=0
+    var imageFormat="",alpha=false
     var duration:Double { seconds>0 ? seconds : fps>0 ? Double(frames)/Double(fps) : 0 }
     var frameRate:Double { nominalFPS>0 ? nominalFPS : Double(fps) }
-    var json: [String:Any] { ["width":width,"height":height,"fps":frameRate,"frames":frames,"duration":duration,"bitrate":bitrate,"sampleRate":sampleRate,"channels":channels] }
+    var json: [String:Any] { ["width":width,"height":height,"fps":frameRate,"frames":frames,"duration":duration,"bitrate":bitrate,"sampleRate":sampleRate,"channels":channels,"imageFormat":imageFormat,"alpha":alpha] }
 }
 func inspectSVGA(_ input: Data, allowAudio:Bool=false) throws -> AnimationInfo {
     guard !input.isEmpty && input.count <= 64*1024*1024 else { throw FrameError("文件为空或超过 64 MB。") }
@@ -69,10 +70,11 @@ func inspectSVGA(_ input: Data, allowAudio:Bool=false) throws -> AnimationInfo {
 @MainActor final class Entry {
     let id = UUID().uuidString, url: URL, bytes: Int, tool:String
     var info: AnimationInfo?, status = "loading", stage = "读取动画", progress = 0, error = "", output: URL?, outputBytes = 0
-    var resultNote="",resultFrames=0,resultSettingsKey=""
+    var resultNote="",resultFrames=0,resultSettingsKey="",resultImageFormat=""
+    var resultWidth=0,resultHeight=0
     init(url: URL, bytes: Int, tool:String) { self.url=url;self.bytes=bytes;self.tool=tool }
     var json: [String:Any] {
-        var result: [String:Any] = ["id":id,"name":url.lastPathComponent,"bytes":bytes,"status":status,"stage":stage,"progress":progress,"error":error,"outputBytes":outputBytes,"tool":tool,"resultNote":resultNote,"resultFrames":resultFrames,"resultSettingsKey":resultSettingsKey]
+        var result: [String:Any] = ["id":id,"name":url.lastPathComponent,"bytes":bytes,"status":status,"stage":stage,"progress":progress,"error":error,"outputBytes":outputBytes,"tool":tool,"resultNote":resultNote,"resultFrames":resultFrames,"resultSettingsKey":resultSettingsKey,"resultImageFormat":resultImageFormat,"resultWidth":resultWidth,"resultHeight":resultHeight]
         if let info { result["info"] = info.json }; if let output { result["output"] = output.path }
         return result
     }
@@ -112,6 +114,13 @@ func inspectSVGA(_ input: Data, allowAudio:Bool=false) throws -> AnimationInfo {
         if pag,let root { args["wasm"] = try Data(contentsOf:root.appendingPathComponent("vendor/libpag.wasm")).base64EncodedString() }
         let result: Any = try await evaluate(pag ? "return await loadPAG(base64,wasm)":"return await loadAnimation(base64)", arguments:args)
         guard let info=result as? [String:Any] else { throw FrameError("播放器没有返回动画参数。") };return info
+    }
+    func inspectImage(_ data:Data) async throws -> [String:Any] {
+        guard let response=try await evaluate("try {return {value:await inspectImage(base64)}} catch(error) {return {error:error.message||String(error)}}",arguments:["base64":data.base64EncodedString()]) as? [String:Any] else {throw FrameError("图片参数无效。")};if let error=response["error"] as? String {throw FrameError(error)};guard let result=response["value"] as? [String:Any] else {throw FrameError("图片参数无效。")};return result
+    }
+    func compressImage(_ data:Data,settings:ToolSettings,root:URL) async throws -> [String:Any] {
+        let wasm=["png":try Data(contentsOf:root.appendingPathComponent("vendor/images/oxipng.wasm")).base64EncodedString(),"webp":try Data(contentsOf:root.appendingPathComponent("vendor/images/webp.wasm")).base64EncodedString()]
+        guard let response=try await evaluate("try {return {value:await compressImage(base64,settings,wasm)}} catch(error) {return {error:error.message||String(error)}}",arguments:["base64":data.base64EncodedString(),"settings":settings.json,"wasm":wasm]) as? [String:Any] else {throw FrameError("图片编码没有返回结果。")};if let error=response["error"] as? String {throw FrameError(error)};guard let result=response["value"] as? [String:Any] else {throw FrameError("图片编码结果无效。")};return result
     }
     func frame(_ index: Int, progress:Double=0) async throws -> Data {
         let result: Any = try await evaluate("return await renderFrame(index,progress)", arguments:["index":index,"progress":progress])
@@ -157,7 +166,7 @@ final class EncoderLog: @unchecked Sendable {
         if let i=args.firstIndex(of:"--smoke-test"), i+1<args.count { smokeInput=URL(fileURLWithPath:args[i+1]);smokeRun=true }
         if let i=args.firstIndex(of:"--output"), i+1<args.count { smokeOutput=URL(fileURLWithPath:args[i+1]) }
         if let i=args.firstIndex(of:"--tool"),i+1<args.count,toolExtensions[args[i+1]] != nil { activeTool=args[i+1] }
-        else if let smokeInput { activeTool=["mp3":"mp3","mp4":"mp4-png","pag":"pag-gif"][smokeInput.pathExtension.lowercased()] ?? "svga-pag" }
+        else if let smokeInput { activeTool=["mp3":"mp3","mp4":"mp4-png","pag":"pag-gif","jpg":"image","jpeg":"image","png":"image","webp":"image"][smokeInput.pathExtension.lowercased()] ?? "svga-pag" }
         if let i=args.firstIndex(of:"--quality"),i+1<args.count,["small","balanced"].contains(args[i+1]) { settings.quality=args[i+1];settings.audioQuality=args[i+1]=="small" ? 0:50 }
         if let i=args.firstIndex(of:"--gif-fps"),i+1<args.count,let n=Int(args[i+1]),[5,10,12,15,20,24,25,30].contains(n) { settings.gifFPS=n }
         if let i=args.firstIndex(of:"--gif-background"),i+1<args.count,["white","black","transparent"].contains(args[i+1]) { settings.background=args[i+1] }
@@ -165,11 +174,13 @@ final class EncoderLog: @unchecked Sendable {
             if let i=args.firstIndex(of:flag),i+1<args.count,let n=Int(args[i+1]),allowed.contains(n) { if flag=="--png-fps" {settings.pngFPS=n};if flag=="--png-size" {settings.pngSize=n};if flag=="--gif-size" {settings.gifSize=n} }
         }
         if let i=args.firstIndex(of:"--output-quality"),i+1<args.count,let value=Int(args[i+1]),(0...100).contains(value) {
-            if activeTool=="svga-pag" {settings.pagQuality=value};if activeTool.hasSuffix("-gif") {settings.gifQuality=value};if activeTool=="mp3" {settings.audioQuality=value}
+            if activeTool=="svga-pag" {settings.pagQuality=value};if activeTool.hasSuffix("-gif") {settings.gifQuality=value};if activeTool=="mp3" {settings.audioQuality=value};if activeTool=="image" {settings.imageQuality=value}
         }
+        if let i=args.firstIndex(of:"--image-format"),i+1<args.count,["original","jpeg","webp"].contains(args[i+1]) {settings.imageFormat=args[i+1]}
+        if let i=args.firstIndex(of:"--image-size"),i+1<args.count,let n=Int(args[i+1]),[0,640,1280,1920,2560,4096].contains(n) {settings.imageSize=n}
         let saved=UserDefaults.standard.string(forKey:"outputDirectory")
         outputDir=smokeOutput ?? saved.map{URL(fileURLWithPath:$0)} ?? FileManager.default.urls(for:.downloadsDirectory,in:.userDomainMask)[0].appendingPathComponent("Frame Exports",isDirectory:true)
-        if !smokeRun { pendingURLs += args.dropFirst().filter { ["svga","pag","mp3","mp4"].contains(URL(fileURLWithPath:$0).pathExtension.lowercased()) }.map { URL(fileURLWithPath:$0) } }
+        if !smokeRun { pendingURLs += args.dropFirst().filter { ["svga","pag","mp3","mp4","jpg","jpeg","png","webp"].contains(URL(fileURLWithPath:$0).pathExtension.lowercased()) }.map { URL(fileURLWithPath:$0) } }
         setupMenu()
         let configuration=WKWebViewConfiguration();configuration.websiteDataStore = .nonPersistent();configuration.userContentController.add(self,name:"frame")
         web=DropWebView(frame:.zero,configuration:configuration);web.navigationDelegate=self;web.setValue(false,forKey:"drawsBackground")
@@ -201,11 +212,11 @@ final class EncoderLog: @unchecked Sendable {
         NSApp.mainMenu=main
         for menu in [appMenu,fileMenu,help] { for item in menu.items where item.action != #selector(NSApplication.terminate(_:)) && item.action != #selector(NSWindow.performClose(_:)) { item.target=self } }
     }
-    @objc func about() { let alert=NSAlert();alert.messageText="Frame";alert.informativeText="本地媒体工具箱 3.3\nSVGA / PAG / MP3 / MP4\n本地处理，无需 Node.js 或 Chrome。\n基于 SVGAPlayer-Web 与腾讯 PAGConvertor。";alert.addButton(withTitle:"好");alert.runModal() }
+    @objc func about() { let alert=NSAlert();alert.messageText="Frame";alert.informativeText="本地媒体工具箱 3.4\nSVGA / PAG / MP3 / MP4\n本地处理，无需 Node.js 或 Chrome。\n基于 SVGAPlayer-Web 与腾讯 PAGConvertor。";alert.addButton(withTitle:"好");alert.runModal() }
     @objc func showHelp() { send(["type":"help"]) }
     @objc func chooseFiles() {
         let panel=NSOpenPanel();panel.title="添加文件 · \(toolNames[activeTool] ?? "Frame")";panel.prompt="添加";panel.allowsMultipleSelection=true;panel.canChooseDirectories=false
-        panel.allowedContentTypes=[UTType(filenameExtension:toolExtensions[activeTool] ?? "svga") ?? .data]
+        panel.allowedContentTypes=(activeTool=="image" ? imageExtensions : [toolExtensions[activeTool] ?? "svga"]).map{UTType(filenameExtension:$0) ?? .data}
         panel.beginSheetModal(for:window) { [weak self] response in if response == .OK { self?.addFiles(panel.urls) } }
     }
     @objc func chooseOutput() {
@@ -264,8 +275,8 @@ final class EncoderLog: @unchecked Sendable {
         var added:[Entry]=[],ignored=0
         for url in urls {
             let ext=url.pathExtension.lowercased()
-            guard ["svga","pag","mp3","mp4"].contains(ext) else { ignored += 1;continue }
-            let tool:String=toolExtensions[activeTool]==ext ? activeTool : (["svga":"svga-pag","pag":"pag-gif","mp3":"mp3","mp4":"mp4-png"][ext] ?? activeTool)
+            guard ["svga","pag","mp3","mp4","jpg","jpeg","png","webp"].contains(ext) else { ignored += 1;continue }
+            let tool:String=imageExtensions.contains(ext) ? "image" : toolExtensions[activeTool]==ext ? activeTool : (["svga":"svga-pag","pag":"pag-gif","mp3":"mp3","mp4":"mp4-png"][ext] ?? activeTool)
             guard !entries.contains(where:{$0.url.standardizedFileURL==url.standardizedFileURL && $0.tool==tool}) else { continue }
             guard entries.count<100 else { ignored += 1;continue }
             let size=(try? url.resourceValues(forKeys:[.fileSizeKey]).fileSize) ?? 0
@@ -278,7 +289,12 @@ final class EncoderLog: @unchecked Sendable {
                 do {
                     guard e.bytes>0 && e.bytes <= (["mp3","mp4-png"].contains(e.tool) ? 2_147_483_648:e.tool.hasPrefix("pag-") ? 256*1024*1024:64*1024*1024) else { throw FrameError("文件为空或超出大小限制；音视频最大 2 GB，PAG 最大 256 MB，SVGA 最大 64 MB。") }
                     let info:AnimationInfo
-                    if e.tool.hasPrefix("pag-") {
+                    if e.tool=="image" {
+                        let renderer=RenderEngine(root:root,host:web);defer {renderer.view.removeFromSuperview()};try await renderer.load(root:root)
+                        let result=try await renderer.inspectImage(Data(contentsOf:e.url))
+                        guard let w=result["width"] as? Int,let h=result["height"] as? Int,let format=result["imageFormat"] as? String else {throw FrameError("图片参数无效。")}
+                        info=AnimationInfo(width:w,height:h,fps:0,frames:1,imageFormat:format,alpha:result["alpha"] as? Bool ?? false)
+                    } else if e.tool.hasPrefix("pag-") {
                         let renderer=RenderEngine(root:root,host:web);defer { renderer.view.removeFromSuperview() };try await renderer.load(root:root)
                         let data=try Data(contentsOf:e.url)
                         guard String(data:data.prefix(3),encoding:.ascii)=="PAG" else { throw FrameError("不是有效的 PAG 文件。") }
@@ -300,6 +316,12 @@ final class EncoderLog: @unchecked Sendable {
     func select(_ id:String) { guard let e=entries.first(where:{$0.id==id}) else { return };selected=id;activeTool=e.tool;snapshot();loadPreview(e) }
     func loadPreview(_ e:Entry) {
         guard let info=e.info else { send(["type":"clearPreview"]);return }
+        if e.tool=="image" {
+            guard let data=try? Data(contentsOf:e.url) else {send(["type":"clearPreview"]);return}
+            var payload:[String:Any]=["type":"imagePreview","id":e.id,"name":e.url.lastPathComponent,"base64":data.base64EncodedString(),"info":info.json]
+            if let url=e.output,let result=try? Data(contentsOf:url) {payload["resultBase64"]=result.base64EncodedString();payload["resultInfo"]=["imageFormat":e.resultImageFormat,"width":e.resultWidth,"height":e.resultHeight,"bytes":e.outputBytes]}
+            send(payload);return
+        }
         if ["mp3","mp4-png"].contains(e.tool) {
             var payload:[String:Any] = ["type":"mediaPreview","id":e.id,"kind":e.tool,"name":e.url.lastPathComponent,"info":info.json]
             if e.tool=="mp4-png" {
@@ -314,7 +336,7 @@ final class EncoderLog: @unchecked Sendable {
         send(payload)
     }
     @objc func startAll() {
-        let candidates=entries.filter { $0.tool==activeTool && ($0.status=="ready" || ($0.status=="done" && $0.resultSettingsKey != settings.fingerprint($0.tool))) }
+        let candidates=entries.filter { $0.tool==activeTool && ($0.status=="ready" || ($0.status=="done" && $0.resultSettingsKey != settings.fingerprint($0.tool,sourceFormat:$0.info?.imageFormat ?? ""))) }
         if !candidates.isEmpty { start(ids:candidates.map{$0.id}) }
         else if let e=entries.first(where:{$0.id==selected && $0.tool==activeTool && $0.status=="done"}) { start(ids:[e.id]) }
         else { toast("先添加待处理的文件") }
@@ -330,9 +352,9 @@ final class EncoderLog: @unchecked Sendable {
             for e in jobs {
                 if stopRequested { e.status="ready";e.stage="等待转换";continue }
                 e.status="running";e.stage="准备渲染";snapshot()
-                do { try await convert(e);e.resultSettingsKey=settings.fingerprint(e.tool);e.status="done";e.stage="转换完成";e.progress=100;succeeded += 1 }
+                do { try await convert(e);e.resultSettingsKey=settings.fingerprint(e.tool,sourceFormat:e.info?.imageFormat ?? "");e.status="done";e.stage="转换完成";e.progress=100;succeeded += 1 }
                 catch { if stopRequested { e.status="cancelled";e.stage="已停止";e.error="转换已停止，可重新转换。" } else { e.status="error";e.stage="转换失败";e.error=error.localizedDescription;failed += 1 } }
-                snapshot()
+                snapshot();if e.tool=="image",selected==e.id {loadPreview(e)}
             }
             let wasStopped=stopRequested;busy=false;stopRequested=false;snapshot()
             toast(wasStopped ? "已停止，已导出的文件已保留" : "已完成 \(succeeded) 个文件"+(failed>0 ? "，\(failed) 个失败" : "，已保存到输出文件夹"))
@@ -348,7 +370,7 @@ final class EncoderLog: @unchecked Sendable {
                     }
                     if !smokeReexported,let i=args.firstIndex(of:"--smoke-reexport-quality"),i+1<args.count,let value=Int(args[i+1]),(0...100).contains(value) {
                         smokeReexported=true
-                        if activeTool=="svga-pag" {settings.pagQuality=value};if activeTool.hasSuffix("-gif") {settings.gifQuality=value};if activeTool=="mp3" {settings.audioQuality=value}
+                        if activeTool=="svga-pag" {settings.pagQuality=value};if activeTool.hasSuffix("-gif") {settings.gifQuality=value};if activeTool=="mp3" {settings.audioQuality=value};if activeTool=="image" {settings.imageQuality=value}
                         print("SMOKE REEXPORT: \(value)%");startAll();return
                     }
                     smokeTimer?.invalidate();NSApp.terminate(nil)
@@ -423,20 +445,23 @@ import AVKit
 
 struct ToolSettings {
     var quality="balanced", gifFPS=15, gifSize=480, background="white", pngFPS=0, pngSize=0
-    var pagQuality=0,gifQuality=50,audioQuality=50
-    func fingerprint(_ tool:String)->String {
+    var pagQuality=0,gifQuality=50,audioQuality=50,imageQuality=50,imageSize=0
+    var imageFormat="original"
+    func fingerprint(_ tool:String,sourceFormat:String="")->String {
         switch tool {
         case "svga-pag":return "pag-video:\(pagQuality)"
+        case "image":let format=imageFormat=="original" ? sourceFormat:imageFormat;return "image:\(format):\(imageSize):\(format=="png" ? "lossless":String(imageQuality))"
         case "mp3":return "mp3:\(audioQuality)"
         case "svga-gif","pag-gif":return "gif:\(gifQuality):\(gifFPS):\(gifSize):\(background)"
         case "mp4-png","svga-png","pag-png":return "png:\(pngFPS):\(pngSize)"
         default:return tool
         }
     }
-    var json:[String:Any] { ["quality":quality,"gifFPS":gifFPS,"gifSize":gifSize,"background":background,"pngFPS":pngFPS,"pngSize":pngSize,"pagQuality":pagQuality,"gifQuality":gifQuality,"audioQuality":audioQuality] }
+    var json:[String:Any] { ["quality":quality,"gifFPS":gifFPS,"gifSize":gifSize,"background":background,"pngFPS":pngFPS,"pngSize":pngSize,"pagQuality":pagQuality,"gifQuality":gifQuality,"audioQuality":audioQuality,"imageQuality":imageQuality,"imageSize":imageSize,"imageFormat":imageFormat] }
 }
-let toolExtensions=["svga-pag":"svga","svga-gif":"svga","pag-gif":"pag","svga-png":"svga","pag-png":"pag","mp3":"mp3","mp4-png":"mp4"]
-let toolNames=["svga-pag":"SVGA → PAG","svga-gif":"SVGA → GIF","pag-gif":"PAG → GIF","svga-png":"SVGA → PNG 序列","pag-png":"PAG → PNG 序列","mp3":"MP3 压缩","mp4-png":"MP4 → PNG 序列"]
+let toolExtensions=["svga-pag":"svga","svga-gif":"svga","pag-gif":"pag","svga-png":"svga","pag-png":"pag","mp3":"mp3","mp4-png":"mp4","image":"png"]
+let imageExtensions=["jpg","jpeg","png","webp"]
+let toolNames=["svga-pag":"SVGA → PAG","svga-gif":"SVGA → GIF","pag-gif":"PAG → GIF","svga-png":"SVGA → PNG 序列","pag-png":"PAG → PNG 序列","mp3":"MP3 压缩","mp4-png":"MP4 → PNG 序列","image":"图片压缩"]
 
 func inspectMedia(_ url:URL,kind:String) async throws -> AnimationInfo {
     let asset=AVURLAsset(url:url),duration=try await asset.load(.duration).seconds
@@ -464,6 +489,9 @@ func inspectMedia(_ url:URL,kind:String) async throws -> AnimationInfo {
         if let value=body["pagQuality"] as? Int,(0...100).contains(value) {settings.pagQuality=value}
         if let value=body["gifQuality"] as? Int,(0...100).contains(value) {settings.gifQuality=value}
         if let value=body["audioQuality"] as? Int,(0...100).contains(value) {settings.audioQuality=value}
+        if let value=body["imageQuality"] as? Int,(0...100).contains(value) {settings.imageQuality=value}
+        if let value=body["imageSize"] as? Int,[0,640,1280,1920,2560,4096].contains(value) {settings.imageSize=value}
+        if let value=body["imageFormat"] as? String,["original","jpeg","webp"].contains(value) {settings.imageFormat=value}
         if let value=body["quality"] as? String,["balanced","small"].contains(value) { settings.quality=value }
         if let value=body["gifFPS"] as? Int,[5,10,12,15,20,24,25,30].contains(value) { settings.gifFPS=value }
         if let value=body["gifSize"] as? Int,[0,240,320,480,720,1080].contains(value) { settings.gifSize=value }
@@ -529,6 +557,17 @@ func inspectMedia(_ url:URL,kind:String) async throws -> AnimationInfo {
         try FileManager.default.createDirectory(at:temp,withIntermediateDirectories:true);tempDir=temp
         defer { engine?.view.removeFromSuperview();engine=nil;encoder=nil;tempDir=nil;try? FileManager.default.removeItem(at:temp) }
         let stem=entry.url.deletingPathExtension().lastPathComponent
+        if entry.tool=="image" {
+            let renderer=RenderEngine(root:root,host:web);engine=renderer;try await renderer.load(root:root);if stopRequested {throw CancellationError()};entry.stage="压缩图片";entry.progress=15;snapshot()
+            let result=try await renderer.compressImage(Data(contentsOf:entry.url),settings:settings,root:root)
+            if stopRequested {throw CancellationError()}
+            guard let format=result["format"] as? String,["png","jpeg","webp"].contains(format),let w=result["width"] as? Int,let h=result["height"] as? Int else {throw FrameError("图片编码结果无效。")}
+            let ext=format=="jpeg" ? "jpg":format,keep=result["keepOriginal"] as? Bool ?? false,target=temp.appendingPathComponent("image."+ext)
+            if !keep {guard let base64=result["base64"] as? String,let bytes=Data(base64Encoded:base64) else {throw FrameError("没有生成图片数据。")};try bytes.write(to:target)}
+            if stopRequested {throw CancellationError()};entry.progress=90;snapshot()
+            try publish(keep ? entry.url:target,entry:entry,stem:stem+"-压缩",ext:ext)
+            entry.resultNote=result["note"] as? String ?? "";entry.resultImageFormat=format;entry.resultWidth=w;entry.resultHeight=h;return
+        }
         if entry.tool=="mp3" {
             let target=temp.appendingPathComponent("compressed.mp3")
             let sourceRate=info.bitrate>0 ? info.bitrate : Int(Double(entry.bytes)*8/max(0.1,info.duration))

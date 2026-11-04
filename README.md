@@ -24,6 +24,7 @@ Frame 为设计师和动效制作人员提供动画格式转换、音频压缩�
 | PAG → PNG 序列 | 逐帧渲染真实画面，保留透明背景，自动编号 |
 | SVGA → GIF | 帧率、尺寸、背景、调色板质量 |
 | PAG → GIF | 帧率、尺寸、背景、调色板质量 |
+| 图片压缩 | JPG / PNG / WebP；画质、尺寸、格式与原图对比 |
 | MP3 压缩 | 在体积和听感之间调整；最高档复制原音频流 |
 | MP4 → PNG 序列 | 无损 PNG；可选择提取帧率和尺寸 |
 
@@ -32,6 +33,8 @@ Frame 为设计师和动效制作人员提供动画格式转换、音频压缩�
 PAG 的两个端点统一使用视频压缩，不提供体积巨大的逐帧无损“高”档。滑块表示编码取舍，不是画面保真百分比。macOS 与 Windows 的编码参数不同，结果不保证逐字节一致。PAG 输出图层合并，不能恢复为原 SVGA 的可编辑图层。
 
 GIF 最多 256 色，不支持连续半透明或音频。SVGA → PAG 支持 SVGA 2.x 无音轨素材；输入尺寸和处理总量受限以控制资源占用。
+
+图片压缩支持静态 JPG、PNG 和 WebP。PNG 原格式直接无损优化，JPEG / WebP 可调画质，也可设置长边上限或转为 WebP；支持原图与结果对比。同格式、同尺寸输出未变小时自动保留原图。压缩档位不代表像素保真百分比，动态 PNG / WebP 暂不支持。
 
 所有工具的空状态配图、说明与选文件按钮均对应当前功能。PNG 序列默认保留原尺寸与原帧率；SVGA / PAG 提取帧率不高于源帧率，输出为 `frame_000000.png` 起的连续编号文件夹。调整设置后可重新导出，旧文件夹保留。
 
@@ -58,16 +61,16 @@ npm ci
 npm run build:windows
 ```
 
-输出位于 `windows/dist/Frame 3.3 Windows`。构建脚本下载并校验 Electron 与 FFmpeg。FFmpeg 上游 `latest` 资产可能变化，哈希不一致会停止；可使用原始依赖缓存，或通过发布版便携目录重建：
+输出位于 `windows/dist/Frame 3.4 Windows`。构建脚本下载并校验 Electron 与 FFmpeg。FFmpeg 上游 `latest` 资产可能变化，哈希不一致会停止；可使用原始依赖缓存，或通过发布版便携目录重建：
 
 ```sh
-node build-windows.cjs --runtime "C:\path\to\Frame 3.3 Windows"
+node build-windows.cjs --runtime "C:\path\to\Frame 3.4 Windows"
 ```
 
 生成安装器需要 NSIS 3，确保 `makensis` 在 PATH，或设置 `NSIS_EXE`：
 
 ```sh
-node build-windows.cjs --runtime "C:\path\to\Frame 3.3 Windows" --installer
+node build-windows.cjs --runtime "C:\path\to\Frame 3.4 Windows" --installer
 ```
 
 更多细节见 [Windows 构建说明](windows/README-build.md)。

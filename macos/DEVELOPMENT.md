@@ -1,4 +1,4 @@
-# Frame 3.3 开发说明
+# Frame 3.4 开发说明
 
 `Frame.swift` 包含 AppKit 宿主、AVFoundation / AVKit 媒体元数据与预览、队列管理、系统 WebKit 动效渲染、PAG 编码与 FFmpeg 子进程调用。`ui/` 为工作台 HTML、样式、交互和渲染页面。
 
@@ -62,3 +62,7 @@ UI 的 pagQuality 0..100 仅为“小体积—均衡”内部插值，映射编�
 新增 svga-png / pag-png 工具；默认逐帧原尺寸导出，保留 alpha。设置 pngFPS / pngSize 后可重新导出。动画提取帧率不超过源帧率。PAG 离屏导出设置 useScale:false，防止 Retina 屏幕将实际像素尺寸放大。结果按 frame_000000.png 编号，每次导出独立文件夹。
 
 原生集成测试支持 --smoke-reexport-png-fps 和 --smoke-reexport-png-size，在同一会话变更设置并再次导出。
+
+## 3.4 图片压缩
+
+新增 image 工具，支持静态 JPG / PNG / WebP。元数据检查与压缩均调用本地 WebKit 隐藏页面中的 image-renderer.js，使用随包 WebP 和 OxiPNG WASM；JPEG 使用本地 Canvas 编码。原尺寸 PNG 直接优化原始字节，避免解码重绘引入像素变化。Mac 构建从 windows/app/vendor/images 复制已生成的共享编码资源；更新编码资源时，在 windows/ 运行 npm ci 和 node build-image-codecs.cjs。仓库已包含预构建资源，普通 Mac 主程序重建无需额外安装 Node.js。

@@ -2,7 +2,7 @@
 set -euo pipefail
 SOURCE_ROOT="${0:A:h}"
 BUILD_ROOT="$SOURCE_ROOT/build"
-APP_SOURCE="${FRAME_BASE_APP:?Set FRAME_BASE_APP to the extracted Frame.app from the macOS 3.2 release}"
+APP_SOURCE="${FRAME_BASE_APP:?Set FRAME_BASE_APP to the extracted Frame.app from a macOS release}"
 [[ -d "$APP_SOURCE/Contents/Resources" ]] || { print -u2 "Invalid FRAME_BASE_APP"; exit 1; }
 APP_TARGET="$BUILD_ROOT/Frame.app"
 mkdir -p "$BUILD_ROOT/ModuleCache" "$APP_TARGET/Contents/MacOS"
@@ -15,6 +15,12 @@ src=Path(sys.argv[1]);app=Path(sys.argv[2]);ui=src/'ui'
 html=(ui/'index.html').read_text().replace('__CSS__',(ui/'style.css').read_text()).replace('__JS__',(ui/'app.js').read_text()).replace('__PLAYER__',(app/'Contents/Resources/vendor/svga.min.js').read_text()).replace('__PAG__',(app/'Contents/Resources/vendor/libpag.js').read_text())
 (app/'Contents/Resources/web/index.html').write_text(html)
 (app/'Contents/Resources/web/renderer.html').write_text((ui/'renderer.html').read_text())
+import shutil
+shutil.copy2(ui/'image-renderer.js',app/'Contents/Resources/web/image-renderer.js')
+images=src.parent/'windows/app/vendor/images'
+if images.exists():shutil.copytree(images,app/'Contents/Resources/vendor/images',dirs_exist_ok=True)
+if not (app/'Contents/Resources/vendor/images/image-codecs.js').exists():raise SystemExit('Missing image codecs: use a Frame 3.4 resource base or build the shared codecs first.')
+for p in (src.parent/'windows/app/licenses').glob('jsquash-*'):shutil.copy2(p,app/'Contents/Resources/licenses'/p.name)
 PY
 SWIFT_EXEC="$(xcrun --find swiftc)"
 SWIFT_INCLUDES="${SWIFT_EXEC:h:h}/include/swift"
